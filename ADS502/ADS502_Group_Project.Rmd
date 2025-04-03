@@ -1,0 +1,51 @@
+---
+title: "ADS502 Group Project"
+author: "Francisco Hernandez, Jason Morfin, Brendan Robinson, Aaron Gabriel"
+date: "2025-04-02"
+output: 
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+library(tidyverse)
+library(psych) 
+drug_induced_training_data <- read.csv("/Users/franky/USD_Jupter_Projects/Applied-Data-Science/ADS502/drug_induced_autoimmunity_prediction/DIA_trainingset_RDKit_descriptors.csv")
+```
+##### Data Cleaning
+
+```{r}
+threshold <- 0.5
+drug_induced_training_data <- drug_induced_training_data[, colMeans(is.na(drug_induced_training_data)) <= threshold]
+
+get_mode <- function(x) {
+    uniq_vals <- unique(x)
+    uniq_vals[which.max(tabulate(match(x, uniq_vals)))]
+}
+categorical_cols <- sapply(drug_induced_training_data, is.character)
+drug_induced_training_data[categorical_cols] <- lapply(
+    drug_induced_training_data[categorical_cols], 
+    function(x) {
+        x[is.na(x)] <- get_mode(x)
+        return(x)
+    })
+write.csv(drug_induced_training_data, "DIA_trainingset_RDKit_descriptors.csv")
+```
+
+##### Descriptive Statistics
+```{r}
+summary(drug_induced_training_data[, 1:6])
+drug_data <- select(drug_induced_training_data, where(is.numeric))
+drug_stats <- describe(drug_data)
+head(drug_stats, 10)
+```
+
+##### Data Quality Report
+```{r}
+data_quality_report <- data.frame(
+  Variable = names(drug_induced_training_data),
+  Type = sapply(drug_induced_training_data, class),
+  Missing = sapply(drug_induced_training_data, function(x) sum(is.na(x))),
+  Complete = sapply(drug_induced_training_data, function(x) sum(!is.na(x))),
+  Unique = sapply(drug_induced_training_data, function(x) length(unique(x)))
+)
+knitr::kable(head(data_quality_report, 40), caption = "Drug Induced Data Quality Report (Preview)")
+```
