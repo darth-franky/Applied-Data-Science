@@ -8,10 +8,12 @@ output:
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(psych) 
-drug_induced_training_data <- read.csv("/Users/franky/USD_Jupter_Projects/Applied-Data-Science/ADS502/drug_induced_autoimmunity_prediction/DIA_trainingset_RDKit_descriptors.csv")
+library(ggplot2)
+library(gridExtra)
+library(corrplot)
+drug_induced_training_data <- read.csv("/Users/jasonavalos/Projects/school/ADS502/project/Applied-Data-Science/ADS502/drug_induced_autoimmunity_prediction/DIA_trainingset_RDKit_descriptors.csv")
 ```
 ##### Data Cleaning
-
 ```{r}
 threshold <- 0.5
 drug_induced_training_data <- drug_induced_training_data[, colMeans(is.na(drug_induced_training_data)) <= threshold]
@@ -49,3 +51,102 @@ data_quality_report <- data.frame(
 )
 knitr::kable(head(data_quality_report, 40), caption = "Drug Induced Data Quality Report (Preview)")
 ```
+
+
+#### Univariate Analysis
+
+```{r}
+hist <- ggplot(drug_induced_training_data, aes(x=BalabanJ)) + geom_histogram(bins = 30)
+boxplot <- ggplot(drug_induced_training_data, aes(x=BalabanJ)) + geom_boxplot()
+
+grid.arrange(hist, boxplot, ncol = 2)
+
+hist_2 <- ggplot(drug_induced_training_data, aes(x=Chi0n)) + geom_histogram(bins = 30)
+boxplot_2 <- ggplot(drug_induced_training_data, aes(x=Chi0n)) + geom_boxplot()
+
+grid.arrange(hist_2, boxplot_2, ncol = 2)
+
+hist_3 <- ggplot(drug_induced_training_data, aes(x=EState_VSA10)) + geom_histogram(bins = 30)
+boxplot_3 <- ggplot(drug_induced_training_data, aes(x=EState_VSA10)) + geom_boxplot()
+
+grid.arrange(hist_3, boxplot_3, ncol = 2)
+
+hist_4 <- ggplot(drug_induced_training_data, aes(x=Kappa3)) + geom_histogram(bins = 30)
+boxplot_4 <- ggplot(drug_induced_training_data, aes(x=Kappa3)) + geom_boxplot()
+
+grid.arrange(hist_4, boxplot_4, ncol = 2)
+
+hist_5 <- ggplot(drug_induced_training_data, aes(x=PEOE_VSA14)) + geom_histogram(bins = 30)
+boxplot_5 <- ggplot(drug_induced_training_data, aes(x=PEOE_VSA14)) + geom_boxplot()
+
+grid.arrange(hist_5, boxplot_5, ncol = 2)
+```
+Features are right sweked. Few outliers that do not need to be removed.
+
+#### Multivariate Analysis
+```{r}
+numeric_cols_indexes <- sapply(drug_induced_training_data, is.numeric)
+numeric_features <- drug_induced_training_data[numeric_cols_indexes]
+
+data <- as.matrix(numeric_features)
+
+heatmap(data,Colv = NA, Rowv = NA, scale = "row")
+```
+
+#### Class Imbalance
+
+```{r}
+print("Pre-balance class cardinality")
+table(drug_induced_training_data$Label)
+
+# Random Undersampling
+balanced_0 <- sample_n(filter(drug_induced_training_data, Label == 0), 118)
+filtered_1 <- filter(drug_induced_training_data, Label == 1)
+bal_drug_induced_training_data <- rbind(balanced_0, filtered_1)
+
+print("Post-balance class cardinality")
+table(bal_drug_induced_training_data$Label)
+```
+
+
+#### Pre-Model Data Preparation
+```{r}
+# Drop SMILES feature
+bal_drug_induced_training_data <- bal_drug_induced_training_data[, colnames(bal_drug_induced_training_data) != "SMILES"]
+
+for (col_name in colnames(bal_drug_induced_training_data)){
+# For binary responses
+  if (length(unique(bal_drug_induced_training_data[[col_name]])) == 2){
+    bal_drug_induced_training_data[[col_name]] <- as.factor(bal_drug_induced_training_data[[col_name]])
+  }
+  
+  # For standarization of numeric responses
+  if (is.numeric(bal_drug_induced_training_data[[col_name]])){
+    if( max(bal_drug_induced_training_data[[col_name]]) != min(bal_drug_induced_training_data[[col_name]])){
+    bal_drug_induced_training_data[[col_name]] <- (bal_drug_induced_training_data[[col_name]] - min(bal_drug_induced_training_data[[col_name]])) /
+    (max(bal_drug_induced_training_data[[col_name]]) - min(bal_drug_induced_training_data[[col_name]]))
+    }
+    else{
+          bal_drug_induced_training_data[[col_name]] <- 0
+    }
+  }
+}
+# Final Dataset
+# bal_drug_induced_training_data
+```
+
+
+#### Feature Selection
+```{r}
+# Missing step --> numeric_features need to be obtained from bal_drug_induced_training_data
+
+model_all <- lm(Label ~ ., data=numeric_features)  # with all the independent variables in the dataframe to find correlated features
+# summary(model_all)
+coeff <- coefficients(model_all)
+
+# To remove correlated where coefficient = NaN -> Correlation
+na_coeff_names <- names(coeff)[is.na(coeff)]
+na_coeff_names
+
+```
+
