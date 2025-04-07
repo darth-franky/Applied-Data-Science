@@ -150,3 +150,81 @@ na_coeff_names
 
 ```
 
+
+# Train and Test
+
+# Load library for modeling and evaluation
+library(caret)
+
+# Drop features with NA coefficients
+cleaned_data <- bal_drug_induced_training_data[, !(names(bal_drug_induced_training_data) %in% na_coeff_names)]
+
+# Ensure Label is a factor
+cleaned_data$Label <- as.factor(cleaned_data$Label)
+
+# Split data into train (80%) and test (20%)
+set.seed(123)
+train_index <- createDataPartition(cleaned_data$Label, p = 0.8, list = FALSE)
+train_data <- cleaned_data[train_index, ]
+test_data <- cleaned_data[-train_index, ]
+
+
+# Baseline Model - Logistic Regression
+
+# Train logistic regression model
+log_model <- glm(Label ~ ., data = train_data, family = "binomial")
+
+# Predict probabilities on test data
+log_probs <- predict(log_model, newdata = test_data, type = "response")
+
+# Convert probabilities to class labels
+log_preds <- ifelse(log_probs > 0.5, 1, 0)
+
+# Evaluate model
+confusionMatrix(as.factor(log_preds), test_data$Label, positive = "1")
+
+
+# Train Other Models (Naive Bayes, Random Forest, C5.0)
+
+# Load libraries
+library(e1071)
+library(randomForest)
+library(C50)
+
+# Naive Bayes
+nb_model <- naiveBayes(Label ~ ., data = train_data)
+nb_preds <- predict(nb_model, newdata = test_data)
+confusionMatrix(nb_preds, test_data$Label)
+
+# Random Forest
+rf_model <- randomForest(Label ~ ., data = train_data, ntree = 100)
+rf_preds <- predict(rf_model, newdata = test_data)
+confusionMatrix(rf_preds, test_data$Label)
+
+# C5.0
+c50_model <- C5.0(Label ~ ., data = train_data)
+c50_preds <- predict(c50_model, newdata = test_data)
+confusionMatrix(c50_preds, test_data$Label)
+
+
+# Compare Accuracy of All Models
+
+accuracy_summary <- data.frame(
+  Model = c("Logistic Regression", "Naive Bayes", "Random Forest", "C5.0"),
+  Accuracy = c(
+    confusionMatrix(as.factor(log_preds), test_data$Label)$overall["Accuracy"],
+    confusionMatrix(nb_preds, test_data$Label)$overall["Accuracy"],
+    confusionMatrix(rf_preds, test_data$Label)$overall["Accuracy"],
+    confusionMatrix(c50_preds, test_data$Label)$overall["Accuracy"]
+  )
+)
+
+print(accuracy_summary)
+
+
+
+
+
+
+
+
