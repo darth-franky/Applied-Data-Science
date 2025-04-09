@@ -149,11 +149,13 @@ na_coeff_names <- names(coeff)[is.na(coeff)]
 na_coeff_names
 
 ```
-
-
 # Train and Test
+```{r}
+#loading libraries for modeling and evaluation
+install.packages("hardhat")
+install.packages("parallelly")
+install.packages("caret")
 
-# Load library for modeling and evaluation
 library(caret)
 
 # Drop features with NA coefficients
@@ -167,23 +169,52 @@ set.seed(123)
 train_index <- createDataPartition(cleaned_data$Label, p = 0.8, list = FALSE)
 train_data <- cleaned_data[train_index, ]
 test_data <- cleaned_data[-train_index, ]
+```
 
+```{r}
+# determining constant variables for removal
+constant_vars <- c("fr_epoxide", "fr_morpholine", "fr_oxime", "fr_tetrazole")
+
+# removing from the training and test datasets:
+train_data_fixed <- train_data[, !(names(train_data) %in% constant_vars)]
+test_data_fixed  <- test_data[, !(names(test_data) %in% constant_vars)]
+
+# Remove the constant variable fr_oxazole from both training and test data
+train_data_fixed <- train_data_fixed[, !(names(train_data_fixed) %in% c("fr_oxazole"))]
+test_data_fixed  <- test_data_fixed[, !(names(test_data_fixed) %in% c("fr_oxazole"))]
+
+# removes factor columns with only one level
+train_data_fixed <- train_data_fixed[, sapply(train_data_fixed, function(col) {
+  !(is.factor(col) || is.character(col)) || length(unique(col)) > 1
+})]
+
+```
+
+```{r}
 
 # Baseline Model - Logistic Regression
 
 # Train logistic regression model
-log_model <- glm(Label ~ ., data = train_data, family = "binomial")
+log_model <- glm(Label ~ ., data = train_data_fixed, family = "binomial")
 
 # Predict probabilities on test data
-log_probs <- predict(log_model, newdata = test_data, type = "response")
+log_probs <- predict(log_model, newdata = test_data_fixed, type = "response")
 
 # Convert probabilities to class labels
 log_preds <- ifelse(log_probs > 0.5, 1, 0)
 
 # Evaluate model
-confusionMatrix(as.factor(log_preds), test_data$Label, positive = "1")
+confusionMatrix(as.factor(log_preds), test_data_fixed$Label, positive = "1")
+```
+
+```{r}
+install.packages("e1071")
+install.packages("randomForest")
+install.packages("C50")
+```
 
 
+```{r}
 # Train Other Models (Naive Bayes, Random Forest, C5.0)
 
 # Load libraries
@@ -205,26 +236,32 @@ confusionMatrix(rf_preds, test_data$Label)
 c50_model <- C5.0(Label ~ ., data = train_data)
 c50_preds <- predict(c50_model, newdata = test_data)
 confusionMatrix(c50_preds, test_data$Label)
+```
 
+```{r}
+# creating a function to extract evaluation metrics from confusion matrix
+get_metrics <- function(preds, actual) {
+  cm <- confusionMatrix(as.factor(preds), as.factor(actual), positive = "1")
+  c(
+    Accuracy = cm$overall["Accuracy"],
+    Sensitivity = cm$byClass["Sensitivity"],
+    Specificity = cm$byClass["Specificity"],
+    Precision = cm$byClass["Pos Pred Value"]
+  )
+}
 
-# Compare Accuracy of All Models
-
+# building model evaluation table for model comparison
 accuracy_summary <- data.frame(
   Model = c("Logistic Regression", "Naive Bayes", "Random Forest", "C5.0"),
-  Accuracy = c(
-    confusionMatrix(as.factor(log_preds), test_data$Label)$overall["Accuracy"],
-    confusionMatrix(nb_preds, test_data$Label)$overall["Accuracy"],
-    confusionMatrix(rf_preds, test_data$Label)$overall["Accuracy"],
-    confusionMatrix(c50_preds, test_data$Label)$overall["Accuracy"]
+  rbind(
+    get_metrics(log_preds, test_data$Label),
+    get_metrics(nb_preds, test_data$Label),
+    get_metrics(rf_preds, test_data$Label),
+    get_metrics(c50_preds, test_data$Label)
   )
 )
 
+# View result
 print(accuracy_summary)
 
-
-
-
-
-
-
-
+```
