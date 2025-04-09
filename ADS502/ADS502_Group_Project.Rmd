@@ -11,6 +11,7 @@ library(psych)
 library(ggplot2)
 library(gridExtra)
 library(corrplot)
+library(reshape2)
 drug_induced_training_data <- read.csv("/Users/jasonavalos/Projects/school/ADS502/project/Applied-Data-Science/ADS502/drug_induced_autoimmunity_prediction/DIA_trainingset_RDKit_descriptors.csv")
 ```
 ##### Data Cleaning
@@ -56,41 +57,53 @@ knitr::kable(head(data_quality_report, 40), caption = "Drug Induced Data Quality
 #### Univariate Analysis
 
 ```{r}
-hist <- ggplot(drug_induced_training_data, aes(x=BalabanJ)) + geom_histogram(bins = 30)
-boxplot <- ggplot(drug_induced_training_data, aes(x=BalabanJ)) + geom_boxplot()
+hist <- ggplot(drug_induced_training_data, aes(x=BalabanJ)) + geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  labs(title = "BalabanJ Histogram", x = "BalabanJ Index", y = "Frecuency")
+boxplot <- ggplot(drug_induced_training_data, aes(x=BalabanJ)) + geom_boxplot() +
+labs(title = "BalabanJ Boxplot", x = "", y = "BalabanJ Index")
 
-grid.arrange(hist, boxplot, ncol = 2)
+grid.arrange(hist, boxplot, ncol = 2, top="Balabanj Index Distribution")
 
-hist_2 <- ggplot(drug_induced_training_data, aes(x=Chi0n)) + geom_histogram(bins = 30)
-boxplot_2 <- ggplot(drug_induced_training_data, aes(x=Chi0n)) + geom_boxplot()
+hist_2 <- ggplot(drug_induced_training_data, aes(x=Chi0n)) + geom_histogram(bins = 30, fill = "steelblue", color = "black")
+boxplot_2 <- ggplot(drug_induced_training_data, aes(x=Chi0n)) + geom_boxplot() +
+  labs(title = "Chi0n Boxplot", x = "", y = "Chi0n Index")
 
 grid.arrange(hist_2, boxplot_2, ncol = 2)
 
-hist_3 <- ggplot(drug_induced_training_data, aes(x=EState_VSA10)) + geom_histogram(bins = 30)
-boxplot_3 <- ggplot(drug_induced_training_data, aes(x=EState_VSA10)) + geom_boxplot()
+hist_3 <- ggplot(drug_induced_training_data, aes(x=EState_VSA10)) + geom_histogram(bins = 30, fill = "steelblue", color = "black")
+boxplot_3 <- ggplot(drug_induced_training_data, aes(x=EState_VSA10)) + geom_boxplot() +
+  labs(title = "EState_VSA10 Boxplot", x = "", y = "EState_VSA10 Index")
 
 grid.arrange(hist_3, boxplot_3, ncol = 2)
 
-hist_4 <- ggplot(drug_induced_training_data, aes(x=Kappa3)) + geom_histogram(bins = 30)
-boxplot_4 <- ggplot(drug_induced_training_data, aes(x=Kappa3)) + geom_boxplot()
+hist_4 <- ggplot(drug_induced_training_data, aes(x=Kappa3)) + geom_histogram(bins = 30, fill = "steelblue", color = "black")
+boxplot_4 <- ggplot(drug_induced_training_data, aes(x=Kappa3)) + geom_boxplot() +
+  labs(title = "Kappa3 Boxplot", x = "", y = "Kappa3 Index")
 
 grid.arrange(hist_4, boxplot_4, ncol = 2)
-
-hist_5 <- ggplot(drug_induced_training_data, aes(x=PEOE_VSA14)) + geom_histogram(bins = 30)
-boxplot_5 <- ggplot(drug_induced_training_data, aes(x=PEOE_VSA14)) + geom_boxplot()
-
-grid.arrange(hist_5, boxplot_5, ncol = 2)
 ```
 Features are right sweked. Few outliers that do not need to be removed.
 
-#### Multivariate Analysis
 ```{r}
-numeric_cols_indexes <- sapply(drug_induced_training_data, is.numeric)
-numeric_features <- drug_induced_training_data[numeric_cols_indexes]
+hist_6 <- ggplot(drug_induced_training_data, aes(x =Label)) +
+  geom_bar(fill = "steelblue", color = "black") +
+  labs(title = "Target Classes Counts")
+hist_6
+```
 
-data <- as.matrix(numeric_features)
+#### Multivariate Analysis
+##### Top 10 correlated features
+```{r}
+numeric_data <- drug_induced_training_data[, sapply(drug_induced_training_data, is.numeric)]
+numeric_data <- numeric_data[, apply(numeric_data, 2, sd, na.rm = TRUE) != 0]
+numeric_data <- na.omit(numeric_data)
 
-heatmap(data,Colv = NA, Rowv = NA, scale = "row")
+cor_matrix <- cor(numeric_data)
+cor_matrix[lower.tri(cor_matrix, diag = TRUE)] <- NA  
+cor_long <- melt(cor_matrix, na.rm = TRUE)
+top_corr <- cor_long[order(-abs(cor_long$value)), ]
+
+head(top_corr, 10)
 ```
 
 #### Class Imbalance
@@ -139,6 +152,8 @@ for (col_name in colnames(bal_drug_induced_training_data)){
 #### Feature Selection
 ```{r}
 # Missing step --> numeric_features need to be obtained from bal_drug_induced_training_data
+numeric_cols_indexes <- sapply(drug_induced_training_data, is.numeric)
+numeric_features <- drug_induced_training_data[numeric_cols_indexes]
 
 model_all <- lm(Label ~ ., data=numeric_features)  # with all the independent variables in the dataframe to find correlated features
 # summary(model_all)
@@ -151,10 +166,11 @@ na_coeff_names
 ```
 # Train and Test
 ```{r}
+# Remove pound if you haven't installed packages below
 #loading libraries for modeling and evaluation
-install.packages("hardhat")
-install.packages("parallelly")
-install.packages("caret")
+# install.packages("hardhat")
+# install.packages("parallelly")
+# install.packages("caret")
 
 library(caret)
 
@@ -208,9 +224,10 @@ confusionMatrix(as.factor(log_preds), test_data_fixed$Label, positive = "1")
 ```
 
 ```{r}
-install.packages("e1071")
-install.packages("randomForest")
-install.packages("C50")
+# Remove pound if you haven't installed packages below
+# install.packages("e1071")
+# install.packages("randomForest")
+# install.packages("C50")
 ```
 
 
