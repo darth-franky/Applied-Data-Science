@@ -1,2 +1,1 @@
-# ADS500B
-ADS500B Team Project
+# USD Applied Data Science
