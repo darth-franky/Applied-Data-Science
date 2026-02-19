@@ -1,0 +1,28 @@
+# ── Credentials (NEVER commit) ───────────────────────────────────────────────
+.env
+
+# ── Dataset (too large for GitHub; download instructions in README) ───────────
+open+university+learning+analytics+dataset/
+
+# ── Generated pipeline outputs ────────────────────────────────────────────────
+outputs/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+env/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+
+# ── Database files ────────────────────────────────────────────────────────────
+*.duckdb
+*.db
+
+# ── Course materials (not project deliverables) ───────────────────────────────
+Final_Project_Requirements.docx

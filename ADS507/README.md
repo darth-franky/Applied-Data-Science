@@ -1,75 +1,189 @@
-# ADS-507 Final Project: OULAD Production-Ready Learning Analytics Pipeline
+# ADS-507 Final Project — OULAD Learning Analytics Pipeline
+**University of San Diego | Applied Data Science**
 
-## Overview
-This repository contains a production-style ELT data pipeline built using the Open University Learning Analytics Dataset (OULAD).  
-The pipeline loads raw SIS/LMS-style CSV data into a persistent DuckDB data store, transforms it into analytics-ready tables, and produces instructor-facing outputs to support early identification of at-risk students.
+> GitHub repo link: *(add your GitHub URL here)*
+
+---
 
 ## Repository Contents
-- `data/raw/`  
-  Raw OULAD CSV files (input data). These files are not modified by the pipeline.
-- `data/oulad.duckdb`  
-  Persistent DuckDB database created/updated by the pipeline.
-- `outputs/`  
-  Generated outputs and monitoring logs:
-  - `instructor_review_queue_top5_per_course.csv`
-  - `pipeline_kpis.csv`
-  - `pipeline_run.log`
-- `src/`  
-  (Optional) Source code folder for future refactors into scripts.
-- `docs/`  
-  Materials for the Design Document and architecture diagram.
-- `dashboard/`  
-  (Optional) Future dashboard deployment folder.
 
-## How to Deploy / Run the Pipeline (Reproducible)
-### Requirements
-- Anaconda (conda)
-- Python 3.11+
-- Packages: `duckdb`, `pandas`, `pyarrow`, `matplotlib`, `jupyterlab`
+| Path | Description |
+|---|---|
+| `ads507_oulad_pipeline_1.ipynb` | Main notebook — full ELT pipeline (Extract → Load → Transform → Monitor → Analyze → Test) |
+| `open+university+learning+analytics+dataset/` | Raw OULAD CSV files (input data, not modified by pipeline) |
+| `outputs/` | Generated CSVs, chart, and run log |
+| `tests/` | pytest test suite (`test_pipeline.py`, `conftest.py`) |
+| `.github/workflows/ci.yml` | GitHub Actions CI — runs unit tests + linter on every push |
+| `requirements.txt` | Python dependencies |
+| `.env.example` | Template for database credentials |
+| `src/run_pipeline.py` | Headless pipeline script — runs full ELT without a notebook |
+| `src/trigger_watcher.py` | Event-based trigger — watches data folder, fires pipeline on new/updated CSVs |
+| `docs/` | Design document and architecture diagram |
+| `dashboard/` | Dashboard deployment folder |
 
-### Setup
-1. Create and activate the environment:
-   - `conda create -n ads507 python=3.11 -y`
-   - `conda activate ads507`
-2. Install dependencies:
-   - `pip install duckdb pandas pyarrow matplotlib jupyterlab`
+---
 
-### Run
-1. Place the 7 OULAD CSV files in: `data/raw/`
-2. Open the notebook:
-   - `ads507_oulad_pipeline_run_from_scratch.ipynb`
-3. Run:
-   - Jupyter: **Kernel → Restart & Run All**
+## How to Deploy the Pipeline
+
+### Prerequisites
+- Python 3.10+
+- **MySQL 8.0+** running locally or on a remote host
+- conda or virtualenv (recommended: `NEWENV`)
+
+### 1 — Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2 — Configure credentials
+```bash
+cp .env.example .env
+# Edit .env and fill in your MySQL host, user, password, and database name
+```
+
+### 3 — Create the MySQL schema
+Log in to MySQL and run:
+```sql
+CREATE DATABASE IF NOT EXISTS oulad_db;
+```
+The pipeline will create all tables automatically on first run.
+
+### 4 — Download the dataset
+
+The raw data files are not included in this repository (`studentVle.csv` alone is 433 MB).
+Download the dataset from UCI Machine Learning Repository:
+
+**[https://archive.ics.uci.edu/dataset/349/open+university+learning+analytics+dataset](https://archive.ics.uci.edu/dataset/349/open+university+learning+analytics+dataset)**
+
+Extract the zip and place all 7 CSV files here:
+```
+open+university+learning+analytics+dataset/
+  assessments.csv
+  courses.csv
+  studentAssessment.csv
+  studentInfo.csv
+  studentRegistration.csv
+  studentVle.csv
+  vle.csv
+```
+
+### 5a — Run manually (notebook)
+```bash
+jupyter lab
+```
+Open `ads507_oulad_pipeline_1.ipynb` and select **Kernel → Restart & Run All**.
+
+### 5b — Run headlessly (command line)
+```bash
+python src/run_pipeline.py
+```
+Runs the full ELT pipeline without a notebook. Same logic, same outputs, suitable for scripting and CI.
+
+### 5c — Run automatically via event trigger
+```bash
+python src/trigger_watcher.py
+```
+Watches the data directory for new or modified CSV files. When a change is detected (e.g., a new data delivery), the pipeline runs automatically — no manual step needed. Stop with `Ctrl-C`.
+
+**To simulate a triggered run:** with the watcher running, `touch` any CSV in the data folder:
+```bash
+touch "open+university+learning+analytics+dataset/studentVle.csv"
+```
+The watcher will detect the change and fire the pipeline within 5 seconds.
 
 The pipeline will:
-- Load raw tables into `data/oulad.duckdb`
-- Build transformed tables:
-  - `fact_weekly_engagement`
-  - `engagement_with_outcomes`
-  - `early_risk_flags`
-  - `instructor_review_queue`
-- Export outputs into `outputs/`
+1. Extract all 7 CSV files and validate schemas
+2. Load raw tables into MySQL (`student_vle` in 500 k-row chunks to simulate incremental ingestion)
+3. Transform data into four analytics tables via SQL
+4. Run health checks — raises `RuntimeError` if any check fails
+5. Export outputs to `outputs/`
+
+---
 
 ## How to Monitor the Pipeline
-The notebook includes basic health checks. A successful run should show:
-- `Missing tables: []`
-- Null key checks equal to 0 for:
-  - `id_student`, `code_module`, `code_presentation`
-- Non-zero row counts for transformed tables
-- An updated timestamp appended to:
-  - `outputs/pipeline_run.log`
 
-## Output Files
-- `outputs/instructor_review_queue_top5_per_course.csv`  
-  Top 5 lowest-engagement students per course presentation (weeks 0–2), intended for instructor/support review.
-- `outputs/pipeline_kpis.csv`  
-  Summary KPIs (students in early window, flagged count, flagged and at-risk count).
-- `outputs/pipeline_run.log`  
-  Append-only run log for monitoring and troubleshooting.
+### Automated health checks
+`run_health_checks()` (Section 4 of the notebook) verifies:
 
-## Next Steps (Planned Enhancements)
-- Replace rule-based flags with interpretable predictive models (e.g., logistic regression).
-- Add additional features (assessment timing, submission patterns).
-- Simulate/ingest live LMS/SIS data via APIs.
-- Deploy a web dashboard for staff consumption.
+| Check | Failure condition |
+|---|---|
+| Table existence | Any of the 11 expected tables is missing |
+| Row counts | `fact_weekly_engagement`, `early_risk_flags`, or `instructor_review_queue` is empty |
+| NULL key fields | Any NULL in `id_student`, `code_module`, or `code_presentation` in the review queue |
+| Flag column validity | `low_engagement_flag` contains any value other than 0 or 1 |
 
+A failed check raises `RuntimeError` and stops the notebook immediately.
+
+### Run log
+Every successful run appends a timestamped entry to `outputs/pipeline_run.log`:
+```
+=== RUN 2026-02-18T14:32:01 ===
+  fact_weekly_engagement  : 627,031
+  early_risk_flags        : 27,544
+  instructor_review_queue : 27,544
+  health_checks           : PASSED
+```
+
+### Outputs
+| File | Description |
+|---|---|
+| `outputs/instructor_review_queue_top5_per_course.csv` | Top 5 lowest-engagement students per course/presentation for instructor review |
+| `outputs/pipeline_kpis.csv` | Summary KPIs: total students, flagged count, flagged & at-risk count |
+| `outputs/engagement_by_outcome.png` | Boxplot of early engagement (weeks 0–2) by final outcome |
+| `outputs/pipeline_run.log` | Append-only run log |
+
+---
+
+## Running Tests
+
+```bash
+# Unit tests only (no database required)
+pytest tests/ -v -m "not integration"
+
+# All tests (requires pipeline to have been run against MySQL)
+pytest tests/ -v
+
+# Lint check
+flake8 tests/ --max-line-length=100
+```
+
+---
+
+## Architecture
+
+```
+open+university+learning+analytics+dataset/
+  (7 CSV files)
+        │
+        ▼  Extract (pandas, na_values=['?'])
+  DataFrames
+        │
+        ▼  Load (SQLAlchemy + mysql-connector)
+  MySQL 8.0 — oulad_db
+  ┌─────────────────────────────────────────┐
+  │  RAW TABLES                             │
+  │  courses  assessments  vle              │
+  │  student_info  student_registration     │
+  │  student_assessment  student_vle        │
+  │  (student_vle loaded in 500k chunks)    │
+  │                                         │
+  │  TRANSFORMED TABLES (SQL)               │
+  │  fact_weekly_engagement                 │
+  │  engagement_with_outcomes               │
+  │  early_risk_flags                       │
+  │  instructor_review_queue                │
+  └─────────────────────────────────────────┘
+        │
+        ▼  Analyze + Export
+  outputs/
+  (CSVs, PNG chart, run log)
+```
+
+---
+
+## Next Steps / Known Gaps
+- **Scalability:** Single-node MySQL; production would use RDS or Cloud SQL with read replicas.
+- **Real-time ingestion:** Chunk simulation would be replaced by an Airflow DAG + S3 event trigger or Kafka consumer.
+- **Predictive model:** The 50-click threshold is a heuristic; logistic regression on weeks 0–2 features would improve recall.
+- **Dashboard:** Connect the review queue to a live Streamlit or Tableau dashboard for instructors.
+- **Security:** IAM-based credential rotation in production; no passwords in environment variables committed to source control.
