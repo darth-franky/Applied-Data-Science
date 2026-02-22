@@ -30,22 +30,22 @@ logging.basicConfig(
 log = logging.getLogger("oulad_pipeline")
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-ROOT       = Path(__file__).resolve().parent.parent
-DATA_DIR   = ROOT / "open+university+learning+analytics+dataset"
-OUTPUTS    = ROOT / "outputs"
-LOG_FILE   = OUTPUTS / "pipeline_run.log"
+ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = ROOT / "open+university+learning+analytics+dataset"
+OUTPUTS = ROOT / "outputs"
+LOG_FILE = OUTPUTS / "pipeline_run.log"
 OUTPUTS.mkdir(exist_ok=True)
 
-NA_VALUES  = ["?", ""]
+NA_VALUES = ["?", ""]
 CHUNK_SIZE = 500_000
 
 RAW_FILES = {
-    "courses":              "courses.csv",
-    "assessments":          "assessments.csv",
-    "vle":                  "vle.csv",
-    "student_info":         "studentInfo.csv",
+    "courses": "courses.csv",
+    "assessments": "assessments.csv",
+    "vle": "vle.csv",
+    "student_info": "studentInfo.csv",
     "student_registration": "studentRegistration.csv",
-    "student_assessment":   "studentAssessment.csv",
+    "student_assessment": "studentAssessment.csv",
 }
 
 DDL = """
@@ -191,7 +191,7 @@ def build_engine():
     host = os.getenv("DB_HOST", "localhost")
     port = os.getenv("DB_PORT", "3306")
     user = os.getenv("DB_USER", "root")
-    pw   = os.getenv("DB_PASSWORD", "")
+    pw = os.getenv("DB_PASSWORD", "")
     name = os.getenv("DB_NAME", "oulad_db")
 
     base = create_engine(f"mysql+mysqlconnector://{user}:{pw}@{host}:{port}")

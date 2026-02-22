@@ -77,8 +77,8 @@ def test_flag_column_is_binary(mini_flags):
 
 def test_precision_calculation(mini_flags):
     """Precision = flagged & at-risk / total flagged."""
-    flagged   = mini_flags[mini_flags.low_engagement_flag == 1]
-    at_risk   = flagged[flagged.final_result.isin(["Fail", "Withdrawn"])]
+    flagged = mini_flags[mini_flags.low_engagement_flag == 1]
+    at_risk = flagged[flagged.final_result.isin(["Fail", "Withdrawn"])]
     precision = len(at_risk) / len(flagged)
     # In the mini fixture both flagged students are at-risk → precision = 1.0
     assert abs(precision - 1.0) < 1e-9

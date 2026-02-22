@@ -35,8 +35,8 @@ logging.basicConfig(
 log = logging.getLogger("trigger_watcher")
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-ROOT         = Path(__file__).resolve().parent.parent
-DATA_DIR     = ROOT / "open+university+learning+analytics+dataset"
+ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = ROOT / "open+university+learning+analytics+dataset"
 PIPELINE_SCRIPT = ROOT / "src" / "run_pipeline.py"
 
 # Minimum seconds between pipeline runs (debounce — avoids double-firing
@@ -88,7 +88,7 @@ def main():
         log.error("Data directory not found: %s", DATA_DIR)
         sys.exit(1)
 
-    handler  = DataDirectoryHandler()
+    handler = DataDirectoryHandler()
     observer = Observer()
     observer.schedule(handler, str(DATA_DIR), recursive=False)
     observer.start()
