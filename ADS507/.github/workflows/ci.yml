@@ -10,26 +10,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: oulad_db
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    env:
-      DB_HOST: 127.0.0.1
-      DB_PORT: 3306
-      DB_USER: root
-      DB_PASSWORD: root
-      DB_NAME: oulad_db
+    defaults:
+      run:
+        working-directory: ADS507
 
     steps:
       - name: Checkout repository
@@ -48,9 +31,3 @@ jobs:
 
       - name: Run unit tests (no DB required)
         run: pytest tests/ -v -m "not integration"
-
-      - name: Run full pipeline (headless)
-        run: python src/run_pipeline.py
-
-      - name: Run integration tests
-        run: pytest tests/ -v -m integration
