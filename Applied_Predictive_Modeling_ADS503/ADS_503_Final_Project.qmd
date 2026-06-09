@@ -1,0 +1,118 @@
+---
+title: "ADS_503_Final_Claims_Prediction"
+author: "Group 1"
+format: html
+editor: visual
+---
+
+# Introduction
+
+The goal of this project is to predict whether a policyholder will file an insurance claim within the next six months.
+---
+
+```{r}
+#load packages 
+library(tidyverse)
+```
+
+```{r}
+list.files()
+```
+
+```{r}
+list.files(pattern = "\\.qmd$")
+```
+
+```{r}
+train <- read_csv("train.csv")
+
+dim(train)
+glimpse(train)
+```
+
+```{r}
+summary(train)
+```
+
+```{r}
+# missing values 
+colSums(is.na(train))
+```
+
+```{r}
+#target variable dist. 
+table(train$is_claim)
+
+prop.table(table(train$is_claim))
+```
+
+```{r}
+#claim dist. plot 
+ggplot(train, aes(x = factor(is_claim))) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    title = "Distribution of Insurance Claims",
+    x = "Claim Filed",
+    y = "Count"
+  )
+```
+
+```{r}
+ggplot(train, aes(x = policy_tenure)) +
+  geom_histogram(bins = 30) +
+  labs(
+    title = "Distribution of Policy Tenure",
+    x = "Policy Tenure",
+    y = "Count"
+  )
+```
+
+```{r}
+ggplot(train,
+       aes(x = factor(is_claim),
+           y = policy_tenure)) +
+  geom_boxplot(fill = "lightblue") +
+  labs(
+    title = "Policy Tenure by Claim Status",
+    x = "Claim Filed",
+    y = "Policy Tenure"
+  )
+```
+
+```{r}
+ggplot(train,
+       aes(x = factor(is_claim),
+           y = age_of_policyholder)) +
+  geom_boxplot(fill = "lightpink") +
+  labs(
+    title = "Age of Policyholder by Claim Status",
+    x = "Claim Filed",
+    y = "Age of Policyholder"
+  )
+```
+
+```{r}
+ggplot(train,
+       aes(x = fuel_type,
+           fill = factor(is_claim))) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Claim Proportion by Fuel Type",
+    x = "Fuel Type",
+    y = "Proportion",
+    fill = "Claim Filed"
+  )
+```
+
+```{r}
+ggplot(train,
+       aes(x = factor(is_claim),
+           y = ncap_rating)) +
+  geom_boxplot(fill = "lightgreen") +
+  labs(
+    title = "NCAP Rating by Claim Status",
+    x = "Claim Filed",
+    y = "NCAP Rating"
+  )
+
+```
