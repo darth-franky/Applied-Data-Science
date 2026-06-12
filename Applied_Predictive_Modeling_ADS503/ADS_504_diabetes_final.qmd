@@ -1,0 +1,115 @@
+---
+title: "ADS_503_Diabetes_EDA"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+
+diabetes <- diabetic_data
+```
+
+```{r}
+dim(diabetes)
+
+names(diabetes)
+```
+
+```{r}
+summary(diabetes)
+```
+
+```{r}
+colSums(diabetes == "?", na.rm = TRUE)
+
+diabetes[diabetes == "?"] <- NA
+```
+
+```{r}
+#eval correlated variable
+numeric_vars <- diabetes %>%
+  select(where(is.numeric))
+
+cor_matrix <- cor(numeric_vars, use = "pairwise.complete.obs")
+```
+
+```{r}
+table(diabetes$readmitted)
+
+prop.table(table(diabetes$readmitted))
+```
+
+```{r}
+ggplot(diabetes,
+       aes(x = readmitted)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    title = "Distribution of Readmission Status",
+    x = "Readmission Status",
+    y = "Count"
+  )
+```
+
+```{r}
+# age vs readmission
+ggplot(diabetes,
+       aes(x = age,
+           fill = readmitted)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Readmission Proportion by Age Group",
+    x = "Age Group",
+    y = "Proportion"
+  )
+```
+
+```{r}
+#time in hospital
+ggplot(diabetes,
+       aes(x = time_in_hospital)) +
+  geom_histogram(bins = 20,
+                 fill = "steelblue")
+```
+
+```{r}
+# time in hospital vs readmission
+ggplot(diabetes,
+       aes(x = readmitted,
+           y = time_in_hospital)) +
+  geom_boxplot(fill = "lightblue")
+```
+
+```{r}
+# number of meds vs readmission
+ggplot(diabetes,
+       aes(x = readmitted,
+           y = number_inpatient)) +
+  geom_boxplot(fill = "lightpink")
+```
+
+```{r}
+# number of inpatiant visits vs readmission 
+ggplot(diabetes,
+       aes(x = readmitted,
+           y = number_inpatient)) +
+  geom_boxplot(fill = "lightpink")
+```
+
+```{r}
+ggplot(diabetes,
+       aes(x = time_in_hospital)) +
+  geom_histogram(bins = 20,
+                 fill = "steelblue")
+```
+
+```{r}
+## suggestions 
+# remove encounter_id and patient_nbr
+ # diabetes <- diabetes %>%
+  # select(-encounter_id, -patient_nbr)
+# change character values to factors
+# diabetes <- diabetes %>%
+  # mutate(across(where(is.character), as.factor))
+
+```
