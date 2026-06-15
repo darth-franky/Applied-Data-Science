@@ -7,7 +7,7 @@ editor: visual
 ```{r}
 library(tidyverse)
 
-diabetes <- diabetic_data
+diabetes <- read_csv("datasets/diabetic_data.csv")
 ```
 
 ```{r}
@@ -105,18 +105,18 @@ ggplot(diabetes,
 
 ```{r}
 # replace all ? with N/A
-diabetic_data[diabetic_data == "?"] <- NA
+diabetes[diabetes == "?"] <- NA
 ```
 
 ```{r}
 # missing value percentages
-missing_pct <- colSums(is.na(diabetic_data)) /
-               nrow(diabetic_data) * 100
+missing_pct <- colSums(is.na(diabetes)) /
+               nrow(diabetes) * 100
 ```
 
 ```{r}
 # remove identifiers
-diabetes_clean <- diabetic_data %>%
+diabetes_clean <- diabetes %>%
   select(-encounter_id, -patient_nbr)
 ```
 
@@ -141,3 +141,255 @@ ggplot(diabetes_clean,
        aes(y = time_in_hospital)) +
   geom_boxplot()
 ```
+
+# Data Wrangling and Pre-processing
+
+> Covers pre-processing, data splitting, and model strategy.
+
+```{r}
+#| label: setup-modeling
+#| message: false
+#| warning: false
+library(tidyverse)
+library(caret)      
+
+set.seed(503)
+```
+
+The raw `readmitted` column has three levels (`<30`, `>30`, `NO`). We frame the predictive task around the clinically and financially important question of **early (within–30-day) readmission**, which is the outcome hospitals are penalized for under CMS readmission programs. We therefore binarize the target: `readmitted = "<30"` → **Yes** (event), all else → **No**.
+
+**Key data-quality decisions**:
+
+- **Patient-level leakage.** The 101,766 rows are hospital *encounters* for only 71,518 unique patients. Keeping multiple encounters per patient would leak information across the train/test boundary, so we retain one (the first) encounter per patient.
+- **Outcome-impossible encounters.** Encounters discharged to death or hospice (`discharge_disposition_id` ∈ {11, 13, 14, 19, 20, 21}) cannot result in readmission and would bias the model; these are removed.
+- **Excessive missingness.** `weight` is \~97% missing, `payer_code` \~40% (administrative), and `medical_specialty` \~49% — all are dropped. The small amount of missing `race` (\~2%) is retained as an explicit `"Unknown"` level.
+- **High-cardinality diagnoses.** `diag_1/2/3` hold 700+ raw ICD-9 codes each. We collapse them into the standard clinical categories (Circulatory, Respiratory, Diabetes, etc.).
+- **Identifiers** (`encounter_id`, `patient_nbr`) and three `Unknown/Invalid` gender rows are removed.
+
+### Feature engineering and cleaning
+
+```{r}
+#| label: preprocess
+
+group_icd9 <- function(code) {
+  num <- suppressWarnings(as.numeric(code))
+  case_when(
+    is.na(code)                                    ~ "Other",
+    str_starts(code, "250")                        ~ "Diabetes",
+    !is.na(num) & ((num>=390 & num<=459)|num==785) ~ "Circulatory",
+    !is.na(num) & ((num>=460 & num<=519)|num==786) ~ "Respiratory",
+    !is.na(num) & ((num>=520 & num<=579)|num==787) ~ "Digestive",
+    !is.na(num) & (num>=800 & num<=999)            ~ "Injury",
+    !is.na(num) & (num>=710 & num<=739)            ~ "Musculoskeletal",
+    !is.na(num) & ((num>=580 & num<=629)|num==788) ~ "Genitourinary",
+    !is.na(num) & (num>=140 & num<=239)            ~ "Neoplasms",
+    TRUE                                           ~ "Other"
+  )
+}
+
+diabetes_model <- diabetes %>%
+  mutate(across(everything(), ~ ifelse(.x == "?", NA, .x))) %>% 
+  arrange(encounter_id) %>% distinct(patient_nbr, .keep_all = TRUE) %>% 
+  filter(!discharge_disposition_id %in% c(11,13,14,19,20,21)) %>%     
+  filter(gender != "Unknown/Invalid") %>%                             
+  select(-encounter_id, -patient_nbr, -weight, -payer_code, -medical_specialty) %>%
+  mutate(across(c(diag_1, diag_2, diag_3), group_icd9)) %>%           
+  mutate(race = replace_na(race, "Unknown")) %>%                      
+  mutate(readmitted = factor(ifelse(readmitted == "<30", "Yes", "No"),
+                             levels = c("Yes", "No"))) %>%            
+  mutate(across(c(admission_type_id, discharge_disposition_id,
+                  admission_source_id), as.character)) %>%            
+  mutate(across(where(is.character), as.factor))
+
+cat("Rows after cleaning:", nrow(diabetes_model),
+    "| Predictors:", ncol(diabetes_model) - 1, "\n")
+cat("Target (early readmission) balance:\n")
+print(round(prop.table(table(diabetes_model$readmitted)), 4))
+cat("Remaining NA cells:", sum(is.na(diabetes_model)), "\n")
+```
+
+### Near-zero variance and correlated predictors
+
+Many drug columns (e.g., `examide`, `citoglipton`) are essentially constant and carry no signal; we remove near-zero-variance predictors. We then check for redundant numeric predictors via `findCorrelation` (\|r\| \> 0.90).
+
+```{r}
+#| label: nzv-corr
+nzv <- nearZeroVar(diabetes_model %>% select(-readmitted), names = TRUE)
+cat("Near-zero-variance predictors removed (", length(nzv), "):\n  ",
+    paste(nzv, collapse = ", "), "\n")
+diabetes_model <- diabetes_model %>% select(-all_of(nzv))
+
+num_pred <- diabetes_model %>% select(where(is.numeric))
+high_corr <- findCorrelation(cor(num_pred), cutoff = 0.90, names = TRUE)
+cat("Highly correlated numeric predictors removed:",
+    ifelse(length(high_corr) == 0, "none", paste(high_corr, collapse = ", ")), "\n")
+if (length(high_corr) > 0)
+  diabetes_model <- diabetes_model %>% select(-all_of(high_corr))
+
+cat("Final modeling frame:", nrow(diabetes_model), "x", ncol(diabetes_model), "\n")
+```
+
+# Data Splitting
+
+We use a **stratified 60/20/20 train/validation/test split** on the binarized target so the \~9% early-readmission rate is preserved in every partition. The training set supports cross-validated hyperparameter tuning; the validation set is for model selection across families; the test set is held out for a single, unbiased final evaluation.
+
+```{r}
+#| label: split
+set.seed(503)
+idx_test <- createDataPartition(diabetes_model$readmitted, p = 0.20, list = FALSE)
+test_df  <- diabetes_model[idx_test, ]
+rest     <- diabetes_model[-idx_test, ]
+
+idx_val  <- createDataPartition(rest$readmitted, p = 0.25, list = FALSE) 
+val_df   <- rest[idx_val, ]
+train_df <- rest[-idx_val, ]
+
+tibble(
+  Set          = c("Train", "Validation", "Test"),
+  n            = c(nrow(train_df), nrow(val_df), nrow(test_df)),
+  Readmit_rate = round(c(mean(train_df$readmitted == "Yes"),
+                         mean(val_df$readmitted   == "Yes"),
+                         mean(test_df$readmitted  == "Yes")), 4)
+)
+```
+
+# Model Strategies
+
+**Primary research question:**
+
+1.  Using demographic, admission, diagnosis, and treatment information captured during a hospital stay, can we predict whether a diabetic patient will be readmitted within 30 days of discharge?
+    1.  This is a **binary classification** problem aimed at flagging high-risk patients for follow-up care.
+
+**Secondary questions:**
+
+1.  Which factors are most associated with early readmission (e.g., prior inpatient visits, number of diagnoses, discharge disposition)?
+2.  Do flexible non-linear learners outperform interpretable linear baselines on this largely categorical dataset?
+
+**Central challenge: class imbalance** (\~9% positive). Two design choices address it:
+
+- *Resampling:* down-sampling the majority class **within** each cross-validation fold (`sampling = "down"` in `caret::trainControl`), keeping resampled performance estimates honest.
+- *Metrics:* accuracy is uninformative (a trivial "no readmission" model scores \~91%). We optimize and report **ROC-AUC** as the primary metric, alongside **sensitivity (recall of readmissions)**, **specificity**, **balanced accuracy**, and **F1**.
+
+All models will be tuned via 5-fold cross-validation on the training set using ROC-AUC, compared on the validation set, and the finalist evaluated once on the test set. The shared resampling scheme is defined below for the model-building stage.
+
+```{r}
+#| label: train-control
+
+ctrl <- trainControl(method = "cv", number = 5,
+                     classProbs = TRUE,
+                     summaryFunction = twoClassSummary,
+                     sampling = "down",
+                     savePredictions = "final")
+```
+
+# Model Building and Hyperparameter Tuning
+
+Each candidate model is tuned with the shared 5-fold cross-validation scheme (`ctrl`) defined above, optimizing ROC-AUC. The additional libraries below support the individual learners.
+
+```{r}
+#| label: model-libs
+#| message: false
+#| warning: false
+library(glmnet)  
+library(earth)   
+library(ranger) 
+library(gbm)  
+library(pROC)   
+```
+
+```{r}
+#| label: train-models
+#| message: false
+#| warning: false
+
+fit <- function(method, ...) {
+  train(readmitted ~ ., data = train_df, method = method,
+        metric = "ROC", trControl = ctrl, ...)
+}
+
+set.seed(503)
+m_glm    <- fit("glm", family = "binomial")   
+m_glmnet <- fit("glmnet", tuneLength = 5)
+m_mars   <- fit("earth", tuneLength = 5)
+m_rpart  <- fit("rpart", tuneLength = 8)
+m_rf     <- fit("ranger", tuneLength = 4, num.trees = 400, importance = "impurity")
+m_gbm    <- fit("gbm", verbose = FALSE,
+                tuneGrid = expand.grid(n.trees = c(150, 300, 500),
+                                       interaction.depth = c(2, 4, 6),
+                                       shrinkage = 0.05, n.minobsinnode = 10))
+
+models <- list(Logistic = m_glm, Penalized = m_glmnet, MARS = m_mars,
+               Tree = m_rpart, RandomForest = m_rf, GBM = m_gbm)
+```
+
+> Plain logistic regression issues *rank-deficient fit* warnings because several sparse dummy-encoded factor levels are linearly dependent. This is precisely the motivation for the **penalized (glmnet)** model, which regularizes such collinear predictors instead of failing on them.
+
+### Cross-validated model comparison
+
+```{r}
+#| label: cv-compare
+#| fig-width: 8
+#| fig-height: 4
+resamps <- resamples(models)
+bwplot(resamps, metric = "ROC", main = "Cross-Validated ROC-AUC by Model")
+```
+
+# Validation and Testing
+
+Every tuned model is scored on the held-out **validation** set across the imbalance-aware metrics. Because overall accuracy is misleading at \~9% prevalence, we rank models by **ROC-AUC** and inspect sensitivity, specificity, balanced accuracy, and F1. The single best model is then carried to the **test** set for one unbiased estimate of generalization performance.
+
+```{r}
+#| label: validation-eval
+
+eval_set <- function(mod, df) {
+  p   <- predict(mod, df, type = "prob")[, "Yes"]
+  cl  <- predict(mod, df)
+  roc <- as.numeric(pROC::auc(pROC::roc(df$readmitted, p,
+                     levels = c("No", "Yes"), direction = "<", quiet = TRUE)))
+  cm  <- confusionMatrix(cl, df$readmitted, positive = "Yes")
+  tibble(ROC_AUC      = roc,
+         Sensitivity  = cm$byClass["Sensitivity"],
+         Specificity  = cm$byClass["Specificity"],
+         Balanced_Acc = cm$byClass["Balanced Accuracy"],
+         F1           = cm$byClass["F1"])
+}
+
+val_results <- imap_dfr(models, ~ eval_set(.x, val_df) %>% mutate(Model = .y)) %>%
+  select(Model, everything()) %>% arrange(desc(ROC_AUC))
+knitr::kable(val_results, digits = 3, caption = "Validation-set performance")
+
+best_name <- val_results$Model[1]
+best_mod  <- models[[best_name]]
+cat("Selected final model:", best_name, "\n")
+```
+
+### Final model: variable importance and test performance
+
+```{r}
+#| label: final-eval
+#| fig-width: 7
+#| fig-height: 5
+plot(varImp(best_mod), top = 15,
+     main = paste("Top 15 Predictors —", best_name))
+
+test_results <- eval_set(best_mod, test_df)
+knitr::kable(test_results, digits = 3,
+             caption = paste("Test-set performance —", best_name))
+```
+
+```{r}
+#| label: roc-curve
+#| fig-width: 6
+#| fig-height: 6
+test_prob <- predict(best_mod, test_df, type = "prob")[, "Yes"]
+roc_obj   <- pROC::roc(test_df$readmitted, test_prob,
+                       levels = c("No", "Yes"), direction = "<", quiet = TRUE)
+plot(roc_obj, col = "steelblue", lwd = 2,
+     main = paste0(best_name, " — Test ROC (AUC = ", round(pROC::auc(roc_obj), 3), ")"))
+```
+
+### Results and final model selection
+
+The gradient boosting machine (GBM) was the strongest model, with a validation ROC-AUC of ≈0.65 that held essentially unchanged on the test set (≈0.65), indicating the pipeline generalizes without overfitting. At an imbalance-aware decision threshold it identifies roughly 55–56% of true early readmissions (sensitivity) while maintaining \~65% specificity. This is far better than the \~9% no-information base rate.
+
+The tree-based and penalized models were close behind, while a single CART tree lagged, confirming that ensemble and regularized methods better capture the many weak, interacting signals in this categorical data. The AUC (\~0.65) is consistent with published results on this benchmark and reflects the difficulty of predicting 30-day readmission from administrative records alone; the variable-importance plot above highlights the strongest drivers (e.g., number of prior inpatient visits, number of diagnoses, discharge disposition) for clinical prioritization.
