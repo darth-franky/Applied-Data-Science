@@ -80,7 +80,7 @@ quarto render ADS_503_diabetes_final.qmd --to html
 | Data wrangling & pre-processing | Complete | *Franky Hernandez* |
 | Data splitting | Complete | *Franky Hernandez* |
 | Model strategy | Complete | *Franky Hernandez* |
-| Model building, validation & results | In progress | *Franky Hernandez / Daniel Lopez* |
+| Model building, validation & results | Complete | *Franky Hernandez / Daniel Lopez* |
 | Technical report & executive summary | Pending | Team |
 
 ## Notes
