@@ -390,6 +390,8 @@ plot(roc_obj, col = "steelblue", lwd = 2,
 
 ### Results and final model selection
 
-The gradient boosting machine (GBM) was the strongest model, with a validation ROC-AUC of ≈0.65 that held essentially unchanged on the test set (≈0.65), indicating the pipeline generalizes without overfitting. At an imbalance-aware decision threshold it identifies roughly 55–56% of true early readmissions (sensitivity) while maintaining \~65% specificity. This is far better than the \~9% no-information base rate.
+The penalized logistic regression model was selected as the final model because it had the highest validation ROC-AUC. Its validation ROC-AUC was 0.647, which was only slightly higher than GBM at 0.643 and logistic regression at 0.642. This suggests that several models performed similarly, but the penalized model was the strongest based on the validation-set selection rule.
 
-The tree-based and penalized models were close behind, while a single CART tree lagged, confirming that ensemble and regularized methods better capture the many weak, interacting signals in this categorical data. The AUC (\~0.65) is consistent with published results on this benchmark and reflects the difficulty of predicting 30-day readmission from administrative records alone; the variable-importance plot above highlights the strongest drivers (e.g., number of prior inpatient visits, number of diagnoses, discharge disposition) for clinical prioritization.
+On the held-out test set, the penalized model had a ROC-AUC of 0.659, with sensitivity of 0.511 and specificity of 0.718. This means the model identified about 51% of true early readmissions while correctly identifying about 72% of non-early-readmission cases. Overall, the model performed better than random guessing, but its predictive strength was still moderate. These results suggest that the model may be useful as a screening or prioritization tool, but it should not be used as a stand-alone clinical decision tool.
+
+
