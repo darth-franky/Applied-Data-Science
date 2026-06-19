@@ -77,7 +77,7 @@ quarto render ADS_503_diabetes_final.qmd --to html
 | Area | Status | Owner |
 |---|---|---|
 | EDA | Complete | *Brianna Sanchez* |
-| Data wrangling & pre-processing | Complete | *Franky Hernandez* |
+| Data wrangling & pre-processing | Complete | *Brianna Sanchez / Franky Hernandez* |
 | Data splitting | Complete | *Franky Hernandez* |
 | Model strategy | Complete | *Franky Hernandez* |
 | Model building, validation & results | Complete | *Franky Hernandez / Daniel Lopez* |
