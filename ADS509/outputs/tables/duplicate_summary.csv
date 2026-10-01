@@ -1,0 +1,4 @@
+measure,count,share
+Eligible parent-child requests,41763,0.133718193781398
+Rows with repeated normalized descriptions,83479,0.26728590136430147
+Rows whose description maps to multiple categories,50145,0.1605559664575869

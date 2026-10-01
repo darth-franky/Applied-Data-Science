@@ -1,0 +1,6 @@
+field,label,available_count,missing_count,missing_share
+lat,Latitude,312222,99,0.0003169815670416014
+lng,Longitude,312222,99,0.0003169815670416014
+zipcode,ZIP code,306329,5992,0.019185389391043188
+council_district,Council district,312129,192,0.0006147521300200755
+comm_plan_name,Community planning area,312072,249,0.0007972566686197854
